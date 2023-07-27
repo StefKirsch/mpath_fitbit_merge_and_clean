@@ -48,3 +48,5 @@ Execution of this script can take a while. Make sure to wait until you get the m
 I tested the script with the sample data I received and also tested it with incomplete data sets. It seems reasonably robust to those. There might be some edge cases though where the script breaks down.
 
 > Tip: You can collapse the sections below in R and jump to a section with with the navigation pane on the right (you might have to make it visible)
+
+Make sure that all variables in the the ESM data are also in `translation_key.xlsx`. If that is not the case, the missing variables will keep their Dutch names and you will get a warning.
