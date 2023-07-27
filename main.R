@@ -1,5 +1,4 @@
 
-
 # libraries ---------------------------------------------------------------
 library(tidyverse)
 library(janitor) # to rename columns
@@ -360,15 +359,7 @@ df_fitbit_per_beep <- merge(
 
 # Tidy up ESM data frame ----------------------------------------------------
 
-df_esm_tidy <- df_esm_raw |>
-  # split up "time and date" column to separate columns
-  # anytime functions to parse datetime strings
-  mutate(  
-    Date = format(anydate(`Date and time`), DATE_FORMAT_TARGET),
-    Time = as_hms(anytime(`Date and time`)),
-    .after = Datetime,
-    .keep = "unused"
-  ) |>    
+df_esm_no_ext <- df_esm_raw |>
   # factor columns: transfer to factor by containing substring 
   # and remove substring from name
   mutate(
@@ -401,12 +392,42 @@ df_esm_tidy <- df_esm_raw |>
   ) |> 
   rename_with( # remove variable tag
     ~ str_trim(str_remove(., PAT_NEG_POS)) 
-  ) |> 
+  )
+
+# Check if variables are missing in the translation key
+cols_to_translate <- setdiff(
+  colnames(df_esm_no_ext), 
+  c("Datetime","Date and time")
+  )
+
+cols_no_translation <- setdiff(
+  cols_to_translate, 
+  TRANSLATION_KEY$dutch
+  )
+
+if (length(cols_no_translation)) {
+  warning(paste(
+    "Some columns in ESM data don't have a translation:", 
+    paste(cols_no_translation, collapse = "\n"),
+    "Check the translation key file and add the missing columns.",
+    sep = "\n"
+  ))
+}
+
+df_esm_tidy <- df_esm_no_ext |> 
+  # split up "time and date" column to separate columns
+  # anytime functions to parse datetime strings
+  mutate(  
+    Date = format(anydate(`Date and time`), DATE_FORMAT_TARGET),
+    Time = as_hms(anytime(`Date and time`)),
+    .after = Datetime,
+    .keep = "unused"
+  ) |>  
   # Translate names
   setnames(
     old = TRANSLATION_KEY$dutch,
     new = TRANSLATION_KEY$english,
-    skip_absent = FALSE
+    skip_absent = TRUE # FALSE produces an error if a column is missing in the dataframe
   ) |> 
   # observation number (= row number)
   mutate( 
@@ -414,9 +435,7 @@ df_esm_tidy <- df_esm_raw |>
     .before = Date
   ) |> 
   # add beep ids by grouping for days
-  group_by(
-    Date
-  ) |> 
+  group_by(Date) |> 
   # add beep id column
   mutate( 
     beep = row_number(),
@@ -444,16 +463,16 @@ df_both <- merge( # merge df, matched with time stamp
     ) |> 
   mutate( # add time categories per observation
     TimeCategory = TIME_CATEGORIES[beep],
-    .after =Time
+    .after = Time
   ) |>
   merge( # add per day columns and rows
     df_fitbit_per_day,
     by = c("Date", "beep"),
     all = TRUE # keep all rows
-  ) |>
-  arrange("obs") |>  # sort rows by observation
+  ) |> 
   select(any_of(ALL_VARS)) |>  # keep target vars only
-  drop_na("obs") # remove fitbit rows with no matching ESM observation
+  drop_na("obs") |>  # remove fitbit rows with no matching ESM observation
+  arrange(obs)  # sort rows by observation
 
 # write result to excel sheet
 file.path(output_folder, file_name_esm) |> 
@@ -464,4 +483,4 @@ file.path(output_folder, file_name_esm) |>
   # FALSE, then missing values will be represented as empty cells
   # In that case, you have to be careful that they won't be read as 0, though!
   
-message("Script completed.")
+message("Script completed!")
