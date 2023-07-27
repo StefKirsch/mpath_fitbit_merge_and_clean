@@ -1,50 +1,4 @@
-#' This script takes the data downloaded from 
-#' - the m-path server and
-#' - fitabase 
-#' 
-#' The data is merged transferred into the desired tidy format. 
-#' Some base statistics (mean per day, minute and hour) are computed as well, 
-#' some of them in the time window before the ESM beeps 
-#' 
-#' Requirements:
-#' You need to have all the libraries below installed
-#' It is recommended to stick to the proposed structure
-#' 
-#' base directory
-#' |--input
-#' |--|--esm
-#' |--|--fitbit
-#' |--|--|--ID_heartrate_1_min_.csv
-#' |--|--|--ID_heartrate_seconds_.csv
-#' |--|--|--ID_minuteStepsNarrow_.csv
-#' |--output
-#' |--main.R
-#' |--translation_key.xlsx
-#' |--ideal_dataset_ESM.xlsx (just for reference)
-#'  
-#' At the moment, you have to manually adjust the file names per time 
-#' window/individual. The script will return one excel file each time it is run.
-#' Joining the excel files can be done manually or you can write your own 
-#' script. 
-#' 
-#' Execution of this script can take a while. Make sure to wait until you 
-#' get the message "done" in the console.
-#' 
-#' #' I tested the script with the sample data I received and also tested it 
-#' with incomplete data sets. It seems reasonably robust to those. There might
-#' be some edge cases though where the script breaks down.  
-#' 
-#' Tip: You can collapse the sections below in R and jump to a section with
-#' with the navigation pane on the right (you might have to make it visible)
 
-
-# File names --------------------------------------------------------------
-
-# update these per participant
-file_name_esm <- "ESM_006_week1.xlsx" 
-
-file_name_steps <- "006_minuteStepsNarrow_20211130_20230117.csv"
-file_name_hr <- "006_heartrate_seconds_20211201_20230117.csv"
 
 # libraries ---------------------------------------------------------------
 library(tidyverse)
@@ -56,7 +10,9 @@ library(anytime) # parse datetime strings
 library(hms)  # convert POSIXct objects to hms format
 library(data.table) # to rename columns with new/old name index
 library(tools) # for file path manipulations
-library(lubridate)
+library(lubridate) 
+library(rstudioapi) # for selectDirectory()
+library(glue)
  
 # functions ---------------------------------------------------------------
 meanna <- function(x) {
@@ -143,9 +99,6 @@ get_time_window_before <- function(datetime, secs_before, unit, step_size) {
 
 # data patterns -----------------------------------------------------------
 
-INPUT_PATH <- "input"
-OUTPUT_PATH <- "output"
-
 # metadata per row
 IDS_VARS <- c(
   "id",
@@ -193,19 +146,44 @@ PAT_YESNO <- c(
   paste("(", ., ")", sep = "")
 
 # fitabase
-FITBIT_FOLDER <- "fitbit"
-#FITBIT_FOLDER <- "fitbit/Incomplete datasets for tests" # for testing
+
+steps_name_pattern <- "minuteStepsNarrow"
+hr_name_pattern <- "heartrate_seconds"
 
 DATE_FORMAT_TARGET <- "%d-%m-%Y"
 
 # read data ---------------------------------------------------------------
 
-# ESM
+## File pickers ------------------------------------------------------
+
+input_file_esm <- selectFile(
+  caption = "Select the input FILE for the m-path ESM data.",
+  label = "Select",
+  path = getActiveProject(),
+  filter = "All Files (*)"
+)
+
+input_folder_fitbit <- selectDirectory(
+  caption = "Select the input FOLDER for the fitbit data.",
+  label = "Select",
+  path = getActiveProject()
+)
+
+# Output folder
+output_folder <- selectDirectory(
+  caption = "Select the root directory where the output should be stored.",
+  label = "Select",
+  path = getActiveProject()
+)
+
+## ESM ------------------------------------------------
+file_name_esm <- basename(input_file_esm)
+
 #ROWS_MAX_FITBIT <-  60*60*24 # set to inf for production
 ROWS_MAX_FITBIT <- Inf
 
 df_esm_raw <- read_excel(
-  file.path(INPUT_PATH, ESM_FOLDER, file_name_esm),
+  file.path(input_file_esm),
   col_names = TRUE,
   skip = 1
   ) |>
@@ -218,15 +196,25 @@ df_esm_raw <- read_excel(
 #' This also contains all desired ESM variable names
 TRANSLATION_KEY <- read_excel( 
   # must be an excel file to read special characters like "ï"
-  file.path(INPUT_PATH, "translation_key.xlsx")
+  file.path("translation_key.xlsx")
 )
 
 # concatenate vector of all target variable names to be selected
 ALL_VARS = c(IDS_VARS, ESM_VARS, TRANSLATION_KEY$english)
 
-# fitbit
+## fitbit ------------------------------------
+
+file_name_steps <- list.files(
+  path = input_folder_fitbit,
+  pattern = steps_name_pattern
+  )
+
+if (length(file_name_steps) > 1) {
+  warning(glue("Found more than one file for \"{steps_name_pattern}\". Reading only the first one."))
+} 
+
 df_steps <- read_csv( # steps
-  file.path(INPUT_PATH, FITBIT_FOLDER, file_name_steps),
+  file.path(input_folder_fitbit, file_name_steps[1]),
   col_names = TRUE,
   n_max = ROWS_MAX_FITBIT 
   ) |> 
@@ -236,9 +224,17 @@ df_steps <- read_csv( # steps
   ) |> 
   arrange(Datetime) # sort by datetime
 
+file_name_hr <- list.files(
+  path = input_folder_fitbit,
+  pattern = hr_name_pattern
+)
+
+if (length(file_name_steps) > 1) {
+  warning(glue("Found more than one file for \"{hr_name_pattern}\". Reading only the first one."))
+} 
 
 df_hr <- read_csv( # heart rate
-  file.path(INPUT_PATH, FITBIT_FOLDER, file_name_hr),
+  file.path(input_folder_fitbit, file_name_hr[1]),
   col_names = TRUE,
   n_max = ROWS_MAX_FITBIT 
   ) |> 
@@ -460,7 +456,7 @@ df_both <- merge( # merge df, matched with time stamp
   drop_na("obs") # remove fitbit rows with no matching ESM observation
 
 # write result to excel sheet
-file.path(OUTPUT_PATH, file_name_esm) |> 
+file.path(output_folder, file_name_esm) |> 
   file_path_sans_ext() |> 
   paste("_fitbit.xlsx", sep = "") %>% 
   write.xlsx(df_both, ., keepNA = TRUE) # this transfers NA into 
@@ -468,4 +464,4 @@ file.path(OUTPUT_PATH, file_name_esm) |>
   # FALSE, then missing values will be represented as empty cells
   # In that case, you have to be careful that they won't be read as 0, though!
   
-print("done")
+message("Script completed.")
