@@ -1,0 +1,10 @@
+achive/
+output/
+input/
+ideal_data_format/
+
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.lintr
