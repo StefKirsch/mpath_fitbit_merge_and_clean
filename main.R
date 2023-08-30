@@ -418,7 +418,7 @@ df_esm_tidy <- df_esm_no_ext |>
   # split up "time and date" column to separate columns
   # anytime functions to parse datetime strings
   mutate(  
-    Date = format(anydate(`Date and time`), DATE_FORMAT_TARGET),
+    Date = anydate(`Date and time`),
     Time = as_hms(anytime(`Date and time`)),
     .after = Datetime,
     .keep = "unused"
@@ -434,8 +434,7 @@ df_esm_tidy <- df_esm_no_ext |>
     obs = row_number(),
     .before = Date
   ) |> 
-  # add beep ids by grouping for days
-  group_by(Date) |> 
+  group_by(Date) |>  # make sure to interpret "Date" as date, so the group order is correct. This should fix issue #1
   # add beep id column
   mutate( 
     beep = row_number(),
@@ -445,7 +444,8 @@ df_esm_tidy <- df_esm_no_ext |>
   mutate( 
     day = cur_group_id(),
     .before = beep
-  )
+  ) |> 
+  mutate(Date = format(Date, DATE_FORMAT_TARGET)) # converts to character
 
 # Merge ESM and fitbit dataframes -----------------------------------------
 
