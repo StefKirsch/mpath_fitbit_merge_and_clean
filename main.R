@@ -12,89 +12,12 @@ library(tools) # for file path manipulations
 library(lubridate) 
 library(rstudioapi) # for selectDirectory()
 library(glue)
+
  
-# functions ---------------------------------------------------------------
-meanna <- function(x) {
-  #' Calculate average. Ignore NA, but return NA if all elements are NA 
-  if(all(is.na(x))) NA
-  else mean(x, na.rm = TRUE)
-}
+# load helper function ---------------------------------------------------------------
+source("R/stat_helpers.R")
+source("R/io_helpers.R")
 
-sumna <- function(x) {
-  #' Calculate sum. Ignore NA, but return NA if all elements are NA 
-  if(all(is.na(x))) NA
-  else sum(x, na.rm = TRUE)
-}
-
-get_stat_per_day <- function(df, stat, obs_id) {
-  #' df:    two column data frame with the first column being POSIXct dates 
-  #'        and the second column being values 
-  #' stat:  stat to compute ("sum" or "mean")
-  #' obs:   observation id of the stat per day
-
-  # convert datetime to date and group by day
-  df <- df |> mutate(
-    Date = as.Date(Datetime),
-    .keep = "unused",
-    .before = 1
-    ) |> 
-    group_by(Date) 
-  
-  value_col <- names(df)[2] # necessary to index second column
-  
-  # compute stat
-  if (stat == "sum") {
-    df <- df |> summarize(
-      value_day = sumna(.data[[value_col]]), # ignore NA
-      n = n()
-    )
-  } else if (stat == "mean") {
-    df <- df |> summarize(
-      value_day = round(meanna(.data[[value_col]]), 1), # ignore NA
-      n = n()
-    )
-  }
-  
-  # add observation id column & arrange by date
-  df <- df %>%
-    mutate(beep = rep(obs_id, times = nrow(.))
-    ) |> 
-    arrange(Date)
-  
-  return(df)
-}
-
-get_time_window_before <- function(datetime, secs_before, unit, step_size) {
-  #' takes a datetime input and creates a vector of datetimes before that datetime
-  #' resulting time stamps are rounded down to the nearest minute, second etc., depending 
-  #' on the chosen resolution
-  #' 
-  #' Arguments
-  #' secs_before:   number of seconds before the input datetime
-  #' unit:          Resolution of the rounding in seconds -> string:("mins", "secs")
-  #' step_size:     Step size of the resulting time vector. whole multiple of the resolution
-  #' 
-  #' Output
-  #' window:        Vector of time stamps before datetime
-  
-  difference_in_secs <- {if (unit=="mins") 60 
-    else if (unit=="secs") 1 
-    else NA
-  }
-  
-  steps = paste(step_size, unit)
-  
-  window <- seq.POSIXt(
-    from = floor_date( # round so that timestamps match with fitbit timestamps
-      datetime - secs_before + difference_in_secs, # remove beep field
-      unit
-    ), 
-    to = datetime,
-    by = steps
-  )
-  
-  return(window)
-}
 
 # data patterns -----------------------------------------------------------
 
@@ -112,7 +35,6 @@ IDS_VARS <- c(
 )
 
 # ESM
-ESM_FOLDER <- "esm"
 ESM_VARS <- c(
   "TimeCategory",
   "Fitbit_steps_day", 
@@ -120,6 +42,7 @@ ESM_VARS <- c(
   "Fitbit_HR_day", 
   "Fitbit_HR_min_before"
   )
+
 TIME_CATEGORIES <- c("Morning", "ESM",	"ESM",	"ESM",	"ESM",	"ESM",	"Evening")
 N_BEEPS <- length(TIME_CATEGORIES)
 # duration to consider before beep 
@@ -146,20 +69,28 @@ PAT_YESNO <- c(
 
 # fitabase
 
-steps_name_pattern <- "minuteStepsNarrow"
-hr_name_pattern <- "heartrate_seconds"
+FILE_PATTERN <- "csv"
+
+steps_filename_pattern <- "minuteStepsNarrow"
+hr_filename_pattern <- "heartrate_seconds"
+
+PATTERN_IN_PATH <- "(\\d{3})(?=_)" # matches three numeric characters and an underscore
+NAME_MATCH_IN_PATH <- "participant"
 
 DATE_FORMAT_TARGET <- "%d-%m-%Y"
+
+#ROWS_MAX_ <-  60*60*24 # set to inf for production
+ROWS_MAX <- Inf
+FILES_MAX <- Inf 
 
 # read data ---------------------------------------------------------------
 
 ## File pickers ------------------------------------------------------
 
-input_file_esm <- selectFile(
-  caption = "Select the input FILE for the m-path ESM data.",
+input_folder_ <- selectDirectory(
+  caption = "Select the input FOLDER for the m-path ESM data.",
   label = "Select",
-  path = getActiveProject(),
-  filter = "All Files (*)"
+  path = getActiveProject()
 )
 
 input_folder_fitbit <- selectDirectory(
@@ -176,10 +107,10 @@ output_folder <- selectDirectory(
 )
 
 ## ESM ------------------------------------------------
-file_name_esm <- basename(input_file_esm)
+#file_name_esm <- basename(input_file_esm)
+file_name_esm <- "esm" # TODO fix this for folder instead of file
 
-#ROWS_MAX_FITBIT <-  60*60*24 # set to inf for production
-ROWS_MAX_FITBIT <- Inf
+
 
 df_esm_raw <- read_excel(
   file.path(input_file_esm),
@@ -203,39 +134,35 @@ ALL_VARS = c(IDS_VARS, ESM_VARS, TRANSLATION_KEY$english)
 
 ## fitbit ------------------------------------
 
-file_name_steps <- list.files(
+### steps ------------------------------------
+
+df_steps <- list.files(
   path = input_folder_fitbit,
-  pattern = steps_name_pattern
-  )
-
-if (length(file_name_steps) > 1) {
-  warning(glue("Found more than one file for \"{steps_name_pattern}\". Reading only the first one."))
-} 
-
-df_steps <- read_csv( # steps
-  file.path(input_folder_fitbit, file_name_steps[1]),
-  col_names = TRUE,
-  n_max = ROWS_MAX_FITBIT 
+  pattern = steps_filename_pattern,
+  full.names = TRUE,
+  recursive = TRUE
   ) |> 
+  get_data_from_path_list_dt() |> 
+  rename( # rename participant number
+    {{NAME_MATCH_IN_PATH}} := match.in.path
+    ) |> 
   rename(Datetime = ActivityMinute) |> 
   mutate( # convert to posixct
     Datetime = mdy_hms(Datetime, truncated = 1, tz = "UTC")
   ) |> 
   arrange(Datetime) # sort by datetime
 
-file_name_hr <- list.files(
-  path = input_folder_fitbit,
-  pattern = hr_name_pattern
-)
+### heart rate ------------------------------------
 
-if (length(file_name_steps) > 1) {
-  warning(glue("Found more than one file for \"{hr_name_pattern}\". Reading only the first one."))
-} 
-
-df_hr <- read_csv( # heart rate
-  file.path(input_folder_fitbit, file_name_hr[1]),
-  col_names = TRUE,
-  n_max = ROWS_MAX_FITBIT 
+df_hr <- list.files(
+    path = input_folder_fitbit,
+    pattern = hr_filename_pattern,
+    full.names = TRUE,
+    recursive = TRUE
+  ) |> 
+  get_data_from_path_list_dt() |> 
+  rename( # rename participant number
+    {{NAME_MATCH_IN_PATH}} := match.in.path
   ) |> 
   rename(Datetime = Time) |> 
   rename(Hr = Value) |> 
@@ -243,6 +170,7 @@ df_hr <- read_csv( # heart rate
     Datetime = mdy_hms(Datetime, truncated = 1, tz = "UTC")
   ) |> 
   arrange(Datetime) # sort by datetime
+
 
 # Stats per day -----------------------------------------------------------
 
