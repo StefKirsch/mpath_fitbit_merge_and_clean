@@ -1,5 +1,3 @@
-# TODO Import this file from a package on GitLab
-
 read_data_catergory_and_cleanup <- function(folder_list, in_folder = NA, cleanup_temp_dir = FALSE) {
   
   matching_files <- folder_list |>
@@ -179,6 +177,3 @@ get_search_path_for_print <- function(dir_path) {
   
   return(new_path)
 }
-
-
-

@@ -12,7 +12,7 @@ sumna <- function(x) {
 }
 
 
-get_stat_per_day <- function(df, stat, obs_id) {
+get_stat_per_day <- function(df, value_col, stat, obs_id) {
   #' df:    two column data frame with the first column being POSIXct dates 
   #'        and the second column being values 
   #' stat:  stat to compute ("sum" or "mean")
@@ -24,28 +24,29 @@ get_stat_per_day <- function(df, stat, obs_id) {
     .keep = "unused",
     .before = 1
   ) |> 
-    group_by(Date) 
-  
-  value_col <- names(df)[2] # necessary to index second column
+    group_by(participant, Date) 
   
   # compute stat
   if (stat == "sum") {
     df <- df |> summarize(
+      file.name = paste0(list(unique((file.name))), sep = ", "),
       value_day = sumna(.data[[value_col]]), # ignore NA
-      n = n()
+      n = n(),
+      .groups = "drop"
     )
   } else if (stat == "mean") {
     df <- df |> summarize(
+      file.name = paste0(list(unique((file.name))), sep = ", "),
       value_day = round(meanna(.data[[value_col]]), 1), # ignore NA
-      n = n()
+      n = n(),
+      .groups = "drop"
     )
   }
   
   # add observation id column & arrange by date
-  df <- df %>%
-    mutate(beep = rep(obs_id, times = nrow(.))
-    ) |> 
-    arrange(Date)
+  df <- df |> 
+    mutate(beep = obs_id) |> 
+    arrange(participant, Date)
   
   return(df)
 }

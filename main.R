@@ -17,7 +17,29 @@ library(glue)
 # load helper function ---------------------------------------------------------------
 source("R/stat_helpers.R")
 source("R/io_helpers.R")
+source("R/col_helpers.R")
 
+
+# functions --------------------------------------------
+
+debug_file_exists <- function() {
+  # Define the path to the DEBUG file in the root folder
+  debug_file_path <- "DEBUG"
+  
+  # Check if the file exists
+  file_exists <- file.exists(debug_file_path)
+  
+  return(file_exists)
+}
+
+
+# Debug options --------------------------------------
+
+DEBUG <- debug_file_exists()
+
+#ROWS_MAX_ <-  60*60*24 # set to inf for production
+ROWS_MAX <- Inf
+FILES_MAX <- Inf 
 
 # data patterns -----------------------------------------------------------
 
@@ -34,40 +56,10 @@ IDS_VARS <- c(
   "Time"
 )
 
-# ESM
-ESM_VARS <- c(
-  "TimeCategory",
-  "Fitbit_steps_day", 
-  "Fitbit_steps_hour_before", 
-  "Fitbit_HR_day", 
-  "Fitbit_HR_min_before"
-  )
+# observations per day
+obs_per_day <- 7
 
-TIME_CATEGORIES <- c("Morning", "ESM",	"ESM",	"ESM",	"ESM",	"ESM",	"Evening")
-N_BEEPS <- length(TIME_CATEGORIES)
-# duration to consider before beep 
-WIN_STEPS_BEFORE_BEEP <- 3600 # seconds. 
-WIN_HR_BEFORE_BEEP <- 60  # seconds. 
-
-# converts elemts of variable names to regexp pattern to match
-PAT_MUL_CHOICE <- str_escape( 
-    c("(multipleChoice)")
-  )
-
-PAT_NEG_POS  <- str_escape(
-    c( "(sliderNegPos)")
-  )
-
-PAT_YESNO <- c(
-  "(yesno)", 
-  "_janee"
-  ) |> 
-  str_escape() |> 
-  paste(collapse = "|") %>% # magrittr pipe to allow 
-                            # changing the location of the main argument
-  paste("(", ., ")", sep = "")
-
-# fitabase
+## fitabase --------------------------------
 
 FILE_PATTERN <- "csv"
 
@@ -79,48 +71,120 @@ NAME_MATCH_IN_PATH <- "participant"
 
 DATE_FORMAT_TARGET <- "%d-%m-%Y"
 
-#ROWS_MAX_ <-  60*60*24 # set to inf for production
-ROWS_MAX <- Inf
-FILES_MAX <- Inf 
 
-# read data ---------------------------------------------------------------
+## mpath/ESM ----------------------------------------
 
-## File pickers ------------------------------------------------------
-
-input_folder_ <- selectDirectory(
-  caption = "Select the input FOLDER for the m-path ESM data.",
-  label = "Select",
-  path = getActiveProject()
+ESM_VARS <- c(
+  "TimeCategory",
+  "Fitbit_steps_day", 
+  "Fitbit_steps_hour_before", 
+  "Fitbit_HR_day", 
+  "Fitbit_HR_min_before"
 )
 
-input_folder_fitbit <- selectDirectory(
-  caption = "Select the input FOLDER for the fitbit data.",
-  label = "Select",
-  path = getActiveProject()
+TIME_CATEGORIES <- c("Morning", "ESM",	"ESM",	"ESM",	"ESM",	"ESM",	"Evening")
+N_BEEPS <- length(TIME_CATEGORIES)
+# duration to consider before beep 
+WIN_STEPS_BEFORE_BEEP <- 3600 # seconds. 
+WIN_HR_BEFORE_BEEP <- 60  # seconds. 
+
+# converts elemts of variable names to regexp pattern to match
+PAT_MUL_CHOICE <- str_escape( 
+  c("(multipleChoice)")
 )
 
-# Output folder
-output_folder <- selectDirectory(
-  caption = "Select the root directory where the output should be stored.",
-  label = "Select",
-  path = getActiveProject()
+PAT_NEG_POS  <- str_escape(
+  c( "(sliderNegPos)")
 )
 
-## ESM ------------------------------------------------
-#file_name_esm <- basename(input_file_esm)
-file_name_esm <- "esm" # TODO fix this for folder instead of file
+PAT_YESNO <- c(
+  "_janee",
+  "(yesno)" 
+) |> 
+  str_escape() |> 
+  paste(collapse = "|") %>% # magrittr pipe to allow changing the location of the main argument
+  paste("(", ., ")", sep = "")
+
+PAT_BODYPARTS  <- str_escape(
+  c( "(bodyParts)")
+)
 
 
+# File pickers ------------------------------------------------------
 
-df_esm_raw <- read_excel(
-  file.path(input_file_esm),
-  col_names = TRUE,
-  skip = 1
-  ) |>
+if (!(DEBUG && exists("provided_user_input"))) { # avoid having to re-specify input during debugging
+  input_folder_esm <- selectDirectory(
+    caption = "Select the input FOLDER for the m-path ESM data.",
+    label = "Select",
+    path = getActiveProject()
+  )
+  
+  input_folder_fitbit <- selectDirectory(
+    caption = "Select the input FOLDER for the fitbit data.",
+    label = "Select",
+    path = getActiveProject()
+  )
+  
+  # Output folder
+  output_folder <- selectDirectory(
+    caption = "Select the root directory where the output should be stored.",
+    label = "Select",
+    path = getActiveProject()
+  )
+  
+  provided_user_input <- TRUE
+}
+
+
+# ESM ------------------------------------------------
+
+folder_name_esm <- gsub( # name for resulting file
+  pattern = "\\s+",
+  replacement = "_",
+  x = basename(input_folder_esm)
+)
+
+esm_files <- list.files(
+  path = input_folder_esm,
+  pattern = ".xlsx$",
+  full.names = TRUE,
+  recursive = FALSE
+)
+
+df_esm_no_ext <- esm_files |> 
+  map(function(x) { # map read_excel() so that a list of file paths can be read
+    # TODO: Add extraction of participant name here
+    
+    read_excel(
+      path = x,
+      col_names = TRUE,
+      skip = 1
+    ) |> 
+      format_cols_by_pat(
+        pattern = PAT_MUL_CHOICE,
+        target_type = "factor"
+      ) |> 
+      format_cols_by_pat(
+        pattern = PAT_BODYPARTS,
+        target_type = "character"
+      ) |> 
+      format_cols_by_pat(
+        pattern = PAT_YESNO,
+        target_type = "factor"
+      ) |> 
+      format_cols_by_pat(
+        pattern = PAT_NEG_POS,
+        target_type = "numeric"
+      )
+  }) |> 
+  list_rbind() |>  # bind to dataframe according to deprecated map_dfr documentation
   mutate( # add POSIXct Datetime
-     Datetime = utctime(`Date and time`, tz = "UTC"), # assume UTC as default
+    Datetime = utctime(`Date and time`, tz = "UTC"), # assume UTC as default
     .before = 1
   )
+
+
+## Translation key ----------------------
 
 #' read variable names translation file. 
 #' This also contains all desired ESM variable names
@@ -132,15 +196,72 @@ TRANSLATION_KEY <- read_excel(
 # concatenate vector of all target variable names to be selected
 ALL_VARS = c(IDS_VARS, ESM_VARS, TRANSLATION_KEY$english)
 
-## fitbit ------------------------------------
 
-### steps ------------------------------------
+cols_to_translate <- setdiff(
+  colnames(df_esm_no_ext), 
+  c("Datetime","Date and time")
+)
+
+cols_no_translation <- setdiff(
+  cols_to_translate, 
+  TRANSLATION_KEY$dutch
+)
+
+if (length(cols_no_translation)) {
+  warning(paste(
+    "Some columns in ESM data don't have a translation:", 
+    paste(cols_no_translation, collapse = "\n"),
+    "Check the translation key file and add the missing columns.",
+    sep = "\n"
+  ))
+}
+
+
+## Tidy up ESM data frame ----------------------------------------------------
+
+df_esm_tidy <- df_esm_no_ext |> 
+  # split up "time and date" column to separate columns
+  # anytime functions to parse datetime strings
+  mutate(  
+    Date = anydate(`Date and time`),
+    Time = as_hms(anytime(`Date and time`)),
+    .after = Datetime,
+    .keep = "unused"
+  ) |>  
+  # Translate names
+  setnames(
+    old = TRANSLATION_KEY$dutch,
+    new = TRANSLATION_KEY$english,
+    skip_absent = TRUE # FALSE produces an error if a column is missing in the dataframe
+  ) |> 
+  # observation number (= row number)
+  mutate( 
+    obs = row_number(),
+    .before = Date
+  ) |> 
+  group_by(Date) |>  # make sure to interpret "Date" as date, so the group order is correct. This should fix issue #1
+  # add beep id column
+  mutate( 
+    beep = row_number(),
+    .before = obs
+  ) |> 
+  # add day id column
+  mutate( 
+    day = cur_group_id(),
+    .before = beep
+  ) |> 
+  mutate(Date = format(Date, DATE_FORMAT_TARGET)) # converts to character
+
+
+# fitbit ------------------------------------
+
+## steps ------------------------------------
 
 df_steps <- list.files(
-  path = input_folder_fitbit,
-  pattern = steps_filename_pattern,
-  full.names = TRUE,
-  recursive = TRUE
+    path = input_folder_fitbit,
+    pattern = steps_filename_pattern,
+    full.names = TRUE,
+    recursive = TRUE
   ) |> 
   get_data_from_path_list_dt() |> 
   rename( # rename participant number
@@ -152,7 +273,8 @@ df_steps <- list.files(
   ) |> 
   arrange(Datetime) # sort by datetime
 
-### heart rate ------------------------------------
+
+## heart rate ------------------------------------
 
 df_hr <- list.files(
     path = input_folder_fitbit,
@@ -172,12 +294,11 @@ df_hr <- list.files(
   arrange(Datetime) # sort by datetime
 
 
-# Stats per day -----------------------------------------------------------
-
-obs_per_day <- 7
+##  Stats per day -----------------------------------------------------------
 
 df_steps_per_day <- df_steps |> 
   get_stat_per_day(
+    value_col = "Steps",
     stat = "sum", 
     obs_id = obs_per_day
     ) |> 
@@ -185,6 +306,7 @@ df_steps_per_day <- df_steps |>
 
 df_hr_per_day <- df_hr |> 
   get_stat_per_day(
+    value_col = "Hr",
     stat = "mean", 
     obs_id = obs_per_day
   ) |> 
@@ -193,7 +315,7 @@ df_hr_per_day <- df_hr |>
 df_fitbit_per_day <- merge( # merge df, matched with date
   df_steps_per_day,
   df_hr_per_day,
-  by = c("Date", "beep"), # if timestamp is missing in one df, value will be NA in respective column
+  by = c("participant", "Date", "beep"), # if timestamp is missing in one df, value will be NA in respective column
   all = TRUE,
   suffixes = c(".steps",".hr")
   ) |>  
@@ -203,24 +325,24 @@ df_fitbit_per_day <- merge( # merge df, matched with date
     .keep = "unused"
   )
   
-# stats per beep (rolling window before each beep) ------------------------
+## stats per beep (rolling window before each beep) ------------------------
 df_windows_steps <- df_windows_hr <- tibble( # empty dfs
   Datetime = POSIXct(), 
   obs = numeric()
   )
  
-for (obs in 1:nrow(df_esm_raw)) { # loop over time stamps in ESM data
+for (obs in 1:nrow(df_esm_tidy)) { # loop over time stamps in ESM data
   
   # generate time vector with time stamps to be considered before each ESM beep
   cur_window_steps <- get_time_window_before(
-    datetime = df_esm_raw$Datetime[obs],
+    datetime = df_esm_tidy$Datetime[obs],
     secs_before = WIN_STEPS_BEFORE_BEEP, 
     unit = "mins", # per minute
     step_size = 1  # one minute
     )
   
   cur_window_hr <- get_time_window_before(
-    datetime = df_esm_raw$Datetime[obs],
+    datetime = df_esm_tidy$Datetime[obs],
     secs_before = WIN_HR_BEFORE_BEEP, 
     unit = "secs", # per second
     step_size = 3  # 3 seconds
@@ -285,97 +407,11 @@ df_fitbit_per_beep <- merge(
   all = TRUE
 )
 
-# Tidy up ESM data frame ----------------------------------------------------
 
-df_esm_no_ext <- df_esm_raw |>
-  # factor columns: transfer to factor by containing substring 
-  # and remove substring from name
-  mutate(
-    across(
-      matches(PAT_MUL_CHOICE), 
-      as.factor 
-    ),
-    .keep = "unused"
-  ) |>
-  rename_with(
-    ~ str_trim(str_remove(., PAT_MUL_CHOICE)) # remove substring and whitespace
-  ) |> 
-  # Same for NegPos slider replies (convert to numeric)
-  mutate(
-    across(
-      matches(PAT_NEG_POS), 
-      as.numeric
-    ),
-    .keep = "unused"
-  ) |> 
-  rename_with(  # remove variable tag
-    ~ str_trim(str_remove_all(., PAT_YESNO)) 
-  ) |> 
-  mutate( # Same for yes-no replies (convert to factor)
-    across(
-      matches(PAT_YESNO), 
-      as.factor
-    ),
-    .keep = "unused"
-  ) |> 
-  rename_with( # remove variable tag
-    ~ str_trim(str_remove(., PAT_NEG_POS)) 
-  )
-
-# Check if variables are missing in the translation key
-cols_to_translate <- setdiff(
-  colnames(df_esm_no_ext), 
-  c("Datetime","Date and time")
-  )
-
-cols_no_translation <- setdiff(
-  cols_to_translate, 
-  TRANSLATION_KEY$dutch
-  )
-
-if (length(cols_no_translation)) {
-  warning(paste(
-    "Some columns in ESM data don't have a translation:", 
-    paste(cols_no_translation, collapse = "\n"),
-    "Check the translation key file and add the missing columns.",
-    sep = "\n"
-  ))
-}
-
-df_esm_tidy <- df_esm_no_ext |> 
-  # split up "time and date" column to separate columns
-  # anytime functions to parse datetime strings
-  mutate(  
-    Date = anydate(`Date and time`),
-    Time = as_hms(anytime(`Date and time`)),
-    .after = Datetime,
-    .keep = "unused"
-  ) |>  
-  # Translate names
-  setnames(
-    old = TRANSLATION_KEY$dutch,
-    new = TRANSLATION_KEY$english,
-    skip_absent = TRUE # FALSE produces an error if a column is missing in the dataframe
-  ) |> 
-  # observation number (= row number)
-  mutate( 
-    obs = row_number(),
-    .before = Date
-  ) |> 
-  group_by(Date) |>  # make sure to interpret "Date" as date, so the group order is correct. This should fix issue #1
-  # add beep id column
-  mutate( 
-    beep = row_number(),
-    .before = obs
-  ) |> 
-  # add day id column
-  mutate( 
-    day = cur_group_id(),
-    .before = beep
-  ) |> 
-  mutate(Date = format(Date, DATE_FORMAT_TARGET)) # converts to character
 
 # Merge ESM and fitbit dataframes -----------------------------------------
+
+# TODO Make sure participant stays in there
 
 df_both <- merge( # merge df, matched with time stamp
     df_esm_tidy, 
@@ -395,15 +431,17 @@ df_both <- merge( # merge df, matched with time stamp
   ) |>
   merge( # add per day columns and rows
     df_fitbit_per_day,
-    by = c("Date", "beep"),
+    by = c("participant", "Date", "beep"),
     all = TRUE # keep all rows
   ) |> 
   select(any_of(ALL_VARS)) |>  # keep target vars only
   drop_na("obs") |>  # remove fitbit rows with no matching ESM observation
   arrange(obs)  # sort rows by observation
 
+# TODO: Add week here
+
 # write result to excel sheet
-file.path(output_folder, file_name_esm) |> 
+file.path(output_folder, folder_name_esm) |> 
   file_path_sans_ext() |> 
   paste("_fitbit.xlsx", sep = "") %>% 
   write.xlsx(df_both, ., keepNA = TRUE) # this transfers NA into 
