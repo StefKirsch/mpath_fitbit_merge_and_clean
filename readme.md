@@ -12,10 +12,6 @@ The data is merged transferred into the desired tidy format. Some base statistic
 1.  To run the script you need [Rstudio](https://posit.co/download/rstudio-desktop/).
 2.  You need to have all the libraries installed. Rstudio should prompt you to install all necessary libraries automatically
 3.  Make sure that `translation_key.xlsx` is located in the project root folder.
-
-```{=html}
-<!-- -->
-```
 4.  The script will prompt you yo manually specify
     -   The path of the folder where the ESM files (from m-path) are located. Make sure that all files are placed directly in that folder and not in subfolders
 
