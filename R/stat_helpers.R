@@ -24,7 +24,7 @@ get_stat_per_day <- function(df, value_col, stat, obs_id) {
     .keep = "unused",
     .before = 1
   ) |> 
-    group_by(participant, Date) 
+    group_by(id, Date) 
   
   # compute stat
   if (stat == "sum") {
@@ -46,7 +46,7 @@ get_stat_per_day <- function(df, value_col, stat, obs_id) {
   # add observation id column & arrange by date
   df <- df |> 
     mutate(beep = obs_id) |> 
-    arrange(participant, Date)
+    arrange(id, Date)
   
   return(df)
 }
