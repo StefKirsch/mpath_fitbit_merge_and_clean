@@ -17,10 +17,7 @@ library(glue)
  
 # load helper function ---------------------------------------------------------------
 source("R/stat_helpers.R")
-# get the IO helpers from Gitlab
-# TODO: Make this a package and think about safety
-source(url("https://gitlab.uvt.nl/skirsch/profiel-study-data-cleaning/-/raw/14-make-read_data_catergory_and_cleanup-universally-useable-for-fitbit-projects/R/io_helpers.R"))
-
+source("R/io_helpers.R")
 source("R/col_helpers.R")
 
 
