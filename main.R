@@ -110,7 +110,7 @@ PAT_BODYPARTS  <- str_escape(
   c( "(bodyParts)")
 )
 
-PATTERN_IN_PATH_ESM <- "(?<=ESM_)(\\d{3})(?=_week)" # e.g. ESM_002_week matches 002
+PATTERN_IN_PATH_ESM <- "(?<=ESM_)(\\d{3})(?=_week)" # e.g. ESM_002_week1 matches 002
 NAME_MATCH_IN_PATH_ESM <- "id"
 
 # File pickers ------------------------------------------------------
