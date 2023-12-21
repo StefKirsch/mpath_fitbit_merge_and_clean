@@ -118,6 +118,10 @@ get_data_from_path_list_dt <- function(path_list, pattern_in_path) {
     pbapply::pblapply(
       function(x) {
         match_in_path <- str_extract(x, pattern_in_path)
+        if (is.na(match_in_path)) {
+          stop(paste("Pattern", pattern_in_path, "not found in path", x))
+        }
+        
         file_name <- tools::file_path_sans_ext(
           basename(x),
           compression = TRUE # remove .gz first

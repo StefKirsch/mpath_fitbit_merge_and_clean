@@ -159,6 +159,9 @@ df_esm_no_ext <- esm_files |>
     
     # extract participant id
     match_in_path <- str_extract(x, PATTERN_IN_PATH_ESM)
+    if (is.na(match_in_path)) {
+      stop(paste("Pattern", PATTERN_IN_PATH_ESM, "not found in path", x))
+    }
     
     read_excel(
       path = x,
