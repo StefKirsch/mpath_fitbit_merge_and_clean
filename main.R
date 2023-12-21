@@ -167,7 +167,7 @@ df_esm_no_ext <- esm_files |>
     ) |> 
     mutate(
       {{NAME_MATCH_IN_PATH_ESM}} := match_in_path
-    )|> 
+    ) |> 
     format_cols_by_pat(
       pattern = PAT_MUL_CHOICE,
       target_type = "factor"
@@ -461,7 +461,7 @@ df_both <- merge( # merge df, matched with time stamp
   drop_na("obs") |>  # remove fitbit rows with no matching ESM observation
   arrange(obs) |>   # sort rows by observation
   mutate(
-    week = floor((day-1)/7) + 1,
+    week = floor((day - 1)/7) + 1,
     .after = id
   )
 
