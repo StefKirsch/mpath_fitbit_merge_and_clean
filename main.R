@@ -110,7 +110,7 @@ PAT_BODYPARTS  <- str_escape(
   c( "(bodyParts)")
 )
 
-PATTERN_IN_PATH_ESM <- "(?<=ESM_)(\\d{3})(?=_week)" # e.g. in ESM_002_week matches 002
+PATTERN_IN_PATH_ESM <- "(?<=ESM_)(\\d{3})(?=_week)" # e.g. ESM_002_week matches 002
 NAME_MATCH_IN_PATH_ESM <- "id"
 
 # File pickers ------------------------------------------------------
@@ -479,4 +479,4 @@ file.path(output_folder, folder_name_esm) |>
   # FALSE, then missing values will be represented as empty cells
   # In that case, you have to be careful that they won't be read as 0, though!
   
-message("Script completed!")
+message("Script completed! 🎉🎉")
