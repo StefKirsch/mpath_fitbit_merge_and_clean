@@ -1,13 +1,13 @@
 meanna <- function(x) {
   #' Calculate average. Ignore NA, but return NA if all elements are NA 
-  if(all(is.na(x))) NA
+  if (all(is.na(x))) NA
   else mean(x, na.rm = TRUE)
 }
 
 
 sumna <- function(x) {
   #' Calculate sum. Ignore NA, but return NA if all elements are NA 
-  if(all(is.na(x))) NA
+  if (all(is.na(x))) NA
   else sum(x, na.rm = TRUE)
 }
 
@@ -65,8 +65,8 @@ get_time_window_before <- function(datetime, secs_before, unit, step_size) {
   #' Output
   #' window:        Vector of time stamps before datetime
   
-  difference_in_secs <- {if (unit=="mins") 60 
-    else if (unit=="secs") 1 
+  difference_in_secs <- {if (unit == "mins") 60 
+    else if (unit == "secs") 1 
     else NA
   }
   

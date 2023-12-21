@@ -72,7 +72,7 @@ get_data_from_path_list_df <- function(path_list, pattern_in_path) {
     steps = min(FILES_MAX, length(path_list))
     )
 
-  df <- path_list |>
+  path_list |>
     head(n = FILES_MAX) |>
     map(function(x) {
       p()  # increment progress bar
@@ -113,7 +113,7 @@ get_data_from_path_list_df <- function(path_list, pattern_in_path) {
 get_data_from_path_list_dt <- function(path_list, pattern_in_path) {
   # with fread and data.table
 
-  df <- path_list |>
+  path_list |>
     head(n = FILES_MAX) |>
     pbapply::pblapply(
       function(x) {
@@ -151,7 +151,7 @@ get_data_from_path_list_dt <- function(path_list, pattern_in_path) {
       data # pass through data as return
     })() |>
     data.table::rbindlist(
-      fill=TRUE # there are some files that have additional meta data columns. Fill these with NA here for rows that don't have them
+      fill = TRUE # there are some files that have additional meta data columns. Fill these with NA here for rows that don't have them
       ) |>
     as_tibble()
 }
