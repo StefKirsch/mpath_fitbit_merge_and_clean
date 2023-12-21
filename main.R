@@ -188,7 +188,7 @@ df_esm_no_ext <- esm_files |>
       target_type = "numeric"
     )
   }) |> 
-  list_rbind() |>  # bind to dataframe according to deprecated map_dfr documentation 
+  list_rbind() |> # bind to dataframe according to deprecated map_dfr documentation 
   relocate( # move id to the beginning
     id,
     .before = 1
@@ -467,9 +467,6 @@ df_both <- merge( # merge df, matched with time stamp
     week = floor((day - 1)/7) + 1,
     .after = id
   )
-
-
-# TODO: Add week here
 
 # Export result --------------------------------
 
