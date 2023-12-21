@@ -249,6 +249,10 @@ df_esm_tidy <- df_esm_no_ext |>
     new = TRANSLATION_KEY$english,
     skip_absent = TRUE # FALSE produces an error if a column is missing in the dataframe
   ) |> 
+  arrange(
+    id,
+    Datetime
+  ) |> 
   # observation number (= row number)
   mutate( 
     obs = row_number(),
