@@ -24,7 +24,7 @@ The data is merged transferred into the desired tidy format. Some base statistic
 Execution of this script can take a while. Make sure to wait until you get the message
 
 ```         
-Script completed!
+Script completed! 🎉🎉
 ```
 
 in the console.
